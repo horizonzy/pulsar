@@ -391,13 +391,12 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                     initializeBookKeeper(callback);
                                 }
                             } else if (isNoSuchLedgerExistsException(rc)) {
-                                log.warn("[{}] Ledger not found: {}", name, ledgers.lastKey());
-                                ledgers.remove(ledgers.lastKey());
+                                log.warn("[{}] Ledger not found: {}", name, id);
+                                ledgers.remove(id);
                                 initializeBookKeeper(callback);
                             } else {
                                 log.error("[{}] Failed to open ledger {}: {}", name, id, BKException.getMessage(rc));
                                 callback.initializeFailed(createManagedLedgerException(rc));
-                                return;
                             }
                         }));
                     };
@@ -2212,13 +2211,15 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
 
     PositionImpl startReadOperationOnLedger(PositionImpl position, OpReadEntry opReadEntry) {
         Long ledgerId = ledgers.ceilingKey(position.getLedgerId());
+//        ledgerId = null;
         if (null == ledgerId) {
             opReadEntry.readEntriesFailed(new ManagedLedgerException.NoMoreEntriesToReadException("The ceilingKey(K key"
                     + ") method is used to return the least key greater than or equal to the given key, "
                     + "or null if there is no such key"), null);
+            return position;
         }
 
-        if (ledgerId != position.getLedgerId()) {
+        if (position.getLedgerId() != ledgerId) {
             // The ledger pointed by this position does not exist anymore. It was deleted because it was empty. We need
             // to skip on the next available ledger
             position = new PositionImpl(ledgerId, 0);
