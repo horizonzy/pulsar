@@ -784,15 +784,14 @@ public class ManagedCursorImpl implements ManagedCursor {
             return;
         }
 
-        int numberOfEntriesToRead = applyMaxSizeCap(maxEntries, maxSizeBytes);
-
         if (hasMoreEntries()) {
             // If we have available entries, we can read them immediately
             if (log.isDebugEnabled()) {
                 log.debug("[{}] [{}] Read entries immediately", ledger.getName(), name);
             }
-            asyncReadEntries(numberOfEntriesToRead, callback, ctx, maxPosition);
+            asyncReadEntries(maxEntries, maxSizeBytes, callback, ctx, maxPosition);
         } else {
+            int numberOfEntriesToRead = applyMaxSizeCap(maxEntries, maxSizeBytes);
             OpReadEntry op = OpReadEntry.create(this, readPosition, numberOfEntriesToRead, callback,
                     ctx, maxPosition);
 
