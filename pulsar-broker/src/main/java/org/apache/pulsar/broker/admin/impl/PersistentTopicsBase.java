@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -391,7 +392,8 @@ public class PersistentTopicsBase extends AdminResource {
                 log.error("[{}] Topic {} already exists", clientAppId(), topicName);
                 throw new RestException(Status.CONFLICT, "This topic already exists");
             }
-
+            latch.countDown();
+            latch.await();
             Topic createdTopic = getOrCreateTopic(topicName, properties);
             log.info("[{}] Successfully created non-partitioned topic {}", clientAppId(), createdTopic);
         } catch (Exception e) {
@@ -403,6 +405,8 @@ public class PersistentTopicsBase extends AdminResource {
             }
         }
     }
+
+
 
     /**
      * It updates number of partitions of an existing partitioned topic. It requires partitioned-topic to

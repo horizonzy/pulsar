@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.servlet.ServletContext;
@@ -82,6 +83,7 @@ public abstract class AdminResource extends PulsarWebResource {
     protected BookKeeper bookKeeper() {
         return pulsar().getBookKeeperClient();
     }
+
 
     /**
      * Get the domain of the topic (whether it's persistent or non-persistent).
@@ -573,6 +575,10 @@ public abstract class AdminResource extends PulsarWebResource {
         internalCreatePartitionedTopic(asyncResponse, numPartitions, createLocalTopicOnly, null);
     }
 
+
+    protected static CountDownLatch latch = new CountDownLatch(2);
+
+
     protected void internalCreatePartitionedTopic(AsyncResponse asyncResponse, int numPartitions,
                                                   boolean createLocalTopicOnly, Map<String, String> properties) {
         Integer maxTopicsPerNamespace = null;
@@ -640,7 +646,7 @@ public abstract class AdminResource extends PulsarWebResource {
                 asyncResponse.resume(new RestException(Status.CONFLICT, "This topic already exists"));
                 return;
             }
-
+            latch.countDown();
             provisionPartitionedTopicPath(asyncResponse, numPartitions, createLocalTopicOnly, properties)
                     .thenCompose(ignored -> tryCreatePartitionsAsync(numPartitions))
                     .whenComplete((ignored, ex) -> {
