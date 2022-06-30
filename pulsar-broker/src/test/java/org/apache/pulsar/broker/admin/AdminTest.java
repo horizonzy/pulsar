@@ -176,6 +176,12 @@ public class AdminTest extends MockedPulsarServiceBaseTest {
     }
 
     @Override
+    protected void doInitConf() throws Exception {
+        super.doInitConf();
+        conf.setMaxTenants(10);
+    }
+
+    @Override
     @AfterMethod(alwaysRun = true)
     public void cleanup() throws Exception {
         super.internalCleanup();
@@ -264,7 +270,7 @@ public class AdminTest extends MockedPulsarServiceBaseTest {
             assertEquals(e.getResponse().getStatus(), 412);
         }
 
-        clusters.deleteNamespaceIsolationPolicy("use", "policy1");
+        asyncRequests(ctx -> clusters.deleteNamespaceIsolationPolicy(ctx, "use", "policy1"));
         assertTrue(((Map<String, NamespaceIsolationDataImpl>) asyncRequests(ctx ->
                 clusters.getNamespaceIsolationPolicies(ctx, "use"))).isEmpty());
 
@@ -403,8 +409,7 @@ public class AdminTest extends MockedPulsarServiceBaseTest {
         } catch (RestException e) {
             assertEquals(e.getResponse().getStatus(), Status.PRECONDITION_FAILED.getStatusCode());
         }
-        verify(clusters, times(23)).validateSuperUserAccessAsync();
-        verify(clusters, times(1)).validateSuperUserAccess();
+        verify(clusters, times(24)).validateSuperUserAccessAsync();
     }
 
     @Test
@@ -617,6 +622,32 @@ public class AdminTest extends MockedPulsarServiceBaseTest {
             assertEquals(e.getResponse().getStatus(), Status.PRECONDITION_FAILED.getStatusCode());
         }
 
+        // Check max tenant count
+        int maxTenants = pulsar.getConfiguration().getMaxTenants();
+        List<String> tenants = pulsar.getPulsarResources().getTenantResources().listTenants();
+
+        for(int tenantSize = tenants.size();tenantSize < maxTenants; tenantSize++ ){
+            final int tenantIndex = tenantSize;
+            Response obj = (Response) asyncRequests(ctx ->
+                    properties.createTenant(ctx, "test-tenant-" + tenantIndex, tenantInfo));
+            Assert.assertTrue(obj.getStatus() < 400 && obj.getStatus() >= 200);
+        }
+        try {
+            Response obj = (Response) asyncRequests(ctx ->
+                    properties.createTenant(ctx, "test-tenant-" +  maxTenants, tenantInfo));
+            fail("should have failed");
+        } catch (RestException e) {
+            assertEquals(e.getResponse().getStatus(), Status.PRECONDITION_FAILED.getStatusCode());
+        }
+
+        // Check creating existing property when tenant reach max count.
+        try {
+            response = asyncRequests(ctx -> properties.createTenant(ctx, "test-tenant-" +  (maxTenants-1), tenantInfo));
+            fail("should have failed");
+        } catch (RestException e) {
+            assertEquals(e.getResponse().getStatus(), Status.CONFLICT.getStatusCode());
+        }
+
         AsyncResponse response2 = mock(AsyncResponse.class);
         namespaces.deleteNamespace(response2, "my-tenant", "use", "my-namespace", false, false);
         ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
@@ -763,14 +794,19 @@ public class AdminTest extends MockedPulsarServiceBaseTest {
         persistentTopics.getList(response, property, cluster, namespace, null);
         verify(response, times(1)).resume(Lists.newArrayList());
         // create topic
-        assertEquals(persistentTopics.getPartitionedTopicList(property, cluster, namespace), Lists.newArrayList());
+        response = mock(AsyncResponse.class);
+        persistentTopics.getPartitionedTopicList(response, property, cluster, namespace);
+        verify(response, timeout(5000).times(1)).resume(Lists.newArrayList());
         response = mock(AsyncResponse.class);
         ArgumentCaptor<Response> responseCaptor = ArgumentCaptor.forClass(Response.class);
         persistentTopics.createPartitionedTopic(response, property, cluster, namespace, topic, 5, false);
         verify(response, timeout(5000).times(1)).resume(responseCaptor.capture());
         assertEquals(responseCaptor.getValue().getStatus(), Response.Status.NO_CONTENT.getStatusCode());
-        assertEquals(persistentTopics.getPartitionedTopicList(property, cluster, namespace), Lists
-                .newArrayList(String.format("persistent://%s/%s/%s/%s", property, cluster, namespace, topic)));
+        response = mock(AsyncResponse.class);
+        persistentTopics.getPartitionedTopicList(response, property, cluster, namespace);
+        verify(response, timeout(5000).times(1))
+                .resume(Lists
+                        .newArrayList(String.format("persistent://%s/%s/%s/%s", property, cluster, namespace, topic)));
 
         TopicName topicName = TopicName.get("persistent", property, cluster, namespace, topic);
         assertEquals(persistentTopics.getPartitionedTopicMetadata(topicName, true, false).partitions, 5);
