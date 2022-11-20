@@ -96,7 +96,7 @@ public interface ManagedLedgerFactory {
      * @param managedLedgerName
      * @param startPosition
      *            set the cursor on that particular position. If setting to `PositionImpl.earliest` it will be
-     *            positioned on the first available entry.
+     *            positioned on the first available 1 entry.
      * @return
      */
     ReadOnlyCursor openReadOnlyCursor(String managedLedgerName, Position startPosition, ManagedLedgerConfig config)
