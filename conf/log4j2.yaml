@@ -31,9 +31,9 @@ Configuration:
       - name: "pulsar.log.file"
         value: "pulsar.log"
       - name: "pulsar.log.immediateFlush"
-        value: "false"
+        value: "true"
       - name: "pulsar.log.appender"
-        value: "RoutingAppender"
+        value: "RollingFile"
       - name: "pulsar.log.root.level"
         value: "info"
       - name: "pulsar.log.level"
@@ -42,12 +42,12 @@ Configuration:
         value: "Console"
 
   # Example: logger-filter script
-#  Scripts:
-#    ScriptFile:
-#      name: filter.js
-#      language: JavaScript
-#      path: ./conf/log4j2-scripts/filter.js
-#      charset: UTF-8
+  #  Scripts:
+  #    ScriptFile:
+  #      name: filter.js
+  #      language: JavaScript
+  #      path: ./conf/log4j2-scripts/filter.js
+  #      charset: UTF-8
 
   Appenders:
 
@@ -74,60 +74,13 @@ Configuration:
           size: 1 GB
       # Delete file older than 30days
       DefaultRolloverStrategy:
-          Delete:
-            basePath: ${sys:pulsar.log.dir}
-            maxDepth: 2
-            IfFileName:
-              glob: "${sys:pulsar.log.file}*log.gz"
-            IfLastModified:
-              age: 30d
-
-    Prometheus:
-      name: Prometheus
-
-    # Routing
-    Routing:
-      name: RoutingAppender
-      Routes:
-        pattern: "$${ctx:function}"
-        Route:
-          -
-            Routing:
-              name: InstanceRoutingAppender
-              Routes:
-                pattern: "$${ctx:instance}"
-                Route:
-                  -
-                    RollingFile:
-                      name: "Rolling-${ctx:function}"
-                      fileName : "${sys:pulsar.log.dir}/functions/${ctx:function}/${ctx:functionname}-${ctx:instance}.log"
-                      filePattern : "${sys:pulsar.log.dir}/functions/${sys:pulsar.log.file}-${ctx:instance}-%d{MM-dd-yyyy}-%i.log.gz"
-                      PatternLayout:
-                        Pattern: "%d{ABSOLUTE} %level{length=5} [%thread] [instance: %X{instance}] %logger{1} - %msg%n"
-                      Policies:
-                        TimeBasedTriggeringPolicy:
-                          interval: 1
-                          modulate: true
-                        SizeBasedTriggeringPolicy:
-                          size: "20MB"
-                        # Trigger every day at midnight that also scan
-                        # roll-over strategy that deletes older file
-                        CronTriggeringPolicy:
-                          schedule: "0 0 0 * * ?"
-                      # Delete file older than 30days
-                      DefaultRolloverStrategy:
-                          Delete:
-                            basePath: ${sys:pulsar.log.dir}
-                            maxDepth: 2
-                            IfFileName:
-                              glob: "${sys:pulsar.log.file}*log.gz"
-                            IfLastModified:
-                              age: 30d
-                  - ref: "${sys:pulsar.routing.appender.default}"
-                    key: "${ctx:function}"
-          - ref: "${sys:pulsar.routing.appender.default}"
-            key: "${ctx:function}"
-
+        Delete:
+          basePath: ${sys:pulsar.log.dir}
+          maxDepth: 2
+          IfFileName:
+            glob: "${sys:pulsar.log.file}*log.gz"
+          IfLastModified:
+            age: 30d
   Loggers:
 
     # Default root logger configuration
@@ -137,21 +90,8 @@ Configuration:
       AppenderRef:
         - ref: "${sys:pulsar.log.appender}"
           level: "${sys:pulsar.log.level}"
-        - ref: Prometheus
+        - ref: Console
           level: info
-
-    Logger:
-      - name: org.apache.bookkeeper.bookie.BookieShell
-        level: info
-        additivity: false
-        AppenderRef:
-          - ref: Console
-
-      - name: verbose
-        level: info
-        additivity: false
-        AppenderRef:
-          - ref: Console
 
     # Logger to inject filter script
 #     - name: org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl
