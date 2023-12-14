@@ -505,6 +505,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 initializeCursors(callback);
             }
 
+
             @Override
             public void operationFailed(MetaStoreException e) {
                 handleBadVersion(e);
