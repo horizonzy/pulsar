@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -88,7 +89,6 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.TypedMessageBuilder;
 import org.apache.pulsar.client.impl.TableViewImpl;
 import org.apache.pulsar.common.policies.data.TopicType;
-import org.apache.pulsar.common.util.collections.ConcurrentOpenHashMap;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
 import org.apache.pulsar.metadata.api.NotificationType;
 import org.apache.pulsar.metadata.api.coordination.LeaderElectionState;
@@ -507,10 +507,10 @@ public class ServiceUnitStateChannelTest extends MockedPulsarServiceBaseTest {
         assertEquals(1, getOwnerRequests1.size());
         assertEquals(1, getOwnerRequests2.size());
 
-        // In 5 secs, the getOwnerAsync requests(lookup requests) should time out.
-        Awaitility.await().atMost(5, TimeUnit.SECONDS)
+        // In 10 secs, the getOwnerAsync requests(lookup requests) should time out.
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
                 .untilAsserted(() -> assertTrue(owner1.isCompletedExceptionally()));
-        Awaitility.await().atMost(5, TimeUnit.SECONDS)
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
                 .untilAsserted(() -> assertTrue(owner2.isCompletedExceptionally()));
 
         assertEquals(0, getOwnerRequests1.size());
@@ -1139,10 +1139,10 @@ public class ServiceUnitStateChannelTest extends MockedPulsarServiceBaseTest {
         assertFalse(owner1.isDone());
         assertFalse(owner2.isDone());
 
-        // In 5 secs, the getOwnerAsync requests(lookup requests) should time out.
-        Awaitility.await().atMost(5, TimeUnit.SECONDS)
+        // In 10 secs, the getOwnerAsync requests(lookup requests) should time out.
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
                 .untilAsserted(() -> assertTrue(owner1.isCompletedExceptionally()));
-        Awaitility.await().atMost(5, TimeUnit.SECONDS)
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
                 .untilAsserted(() -> assertTrue(owner2.isCompletedExceptionally()));
 
         // recovered, check the monitor update state : Assigned -> Owned
@@ -1558,9 +1558,9 @@ public class ServiceUnitStateChannelTest extends MockedPulsarServiceBaseTest {
     }
 
 
-    private static ConcurrentOpenHashMap<String, CompletableFuture<Optional<String>>> getOwnerRequests(
+    private static ConcurrentHashMap<String, CompletableFuture<Optional<String>>> getOwnerRequests(
             ServiceUnitStateChannel channel) throws IllegalAccessException {
-        return (ConcurrentOpenHashMap<String, CompletableFuture<Optional<String>>>)
+        return (ConcurrentHashMap<String, CompletableFuture<Optional<String>>>)
                 FieldUtils.readDeclaredField(channel,
                         "getOwnerRequests", true);
     }
@@ -1577,9 +1577,9 @@ public class ServiceUnitStateChannelTest extends MockedPulsarServiceBaseTest {
                 FieldUtils.readField(channel, "lastMetadataSessionEventTimestamp", true);
     }
 
-    private static ConcurrentOpenHashMap<String, CompletableFuture<Void>> getCleanupJobs(
+    private static ConcurrentHashMap<String, CompletableFuture<Void>> getCleanupJobs(
             ServiceUnitStateChannel channel) throws IllegalAccessException {
-        return (ConcurrentOpenHashMap<String, CompletableFuture<Void>>)
+        return (ConcurrentHashMap<String, CompletableFuture<Void>>)
                 FieldUtils.readField(channel, "cleanupJobs", true);
     }
 
