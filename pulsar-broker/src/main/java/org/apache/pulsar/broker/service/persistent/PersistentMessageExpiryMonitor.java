@@ -28,14 +28,14 @@ import javax.annotation.Nullable;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.FindEntryCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.ManagedCursor;
+import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.LedgerNotExistException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.NonRecoverableLedgerException;
 import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.PositionFactory;
-import org.apache.bookkeeper.mledger.impl.ManagedCursorImpl;
-import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats;
+import org.apache.bookkeeper.mledger.util.ManagedLedgerUtils;
 import org.apache.pulsar.broker.service.MessageExpirer;
 import org.apache.pulsar.client.impl.MessageImpl;
 import org.apache.pulsar.common.api.proto.CommandSubscribe.SubType;
@@ -113,27 +113,25 @@ public class PersistentMessageExpiryMonitor implements FindEntryCallback, Messag
         if (messageTTLInSeconds <= 0) {
             return;
         }
-        if (cursor instanceof ManagedCursorImpl managedCursor) {
-            ManagedLedgerImpl managedLedger = (ManagedLedgerImpl) managedCursor.getManagedLedger();
-            Position deletedPosition = managedCursor.getMarkDeletedPosition();
-            SortedMap<Long, MLDataFormats.ManagedLedgerInfo.LedgerInfo> ledgerInfoSortedMap =
-                    managedLedger.getLedgersInfo().subMap(deletedPosition.getLedgerId(), true,
-                            managedLedger.getLedgersInfo().lastKey(), true);
-            MLDataFormats.ManagedLedgerInfo.LedgerInfo info = null;
-            for (MLDataFormats.ManagedLedgerInfo.LedgerInfo ledgerInfo : ledgerInfoSortedMap.values()) {
-                if (!ledgerInfo.hasTimestamp() || ledgerInfo.getTimestamp() == 0L
-                        || !MessageImpl.isEntryExpired(messageTTLInSeconds, ledgerInfo.getTimestamp())) {
-                    break;
-                }
-                info = ledgerInfo;
+        ManagedLedger managedLedger = cursor.getManagedLedger();
+        Position deletedPosition = cursor.getMarkDeletedPosition();
+        SortedMap<Long, MLDataFormats.ManagedLedgerInfo.LedgerInfo> ledgerInfoSortedMap =
+                managedLedger.getLedgersInfo().subMap(deletedPosition.getLedgerId(), true,
+                        managedLedger.getLedgersInfo().lastKey(), true);
+        MLDataFormats.ManagedLedgerInfo.LedgerInfo info = null;
+        for (MLDataFormats.ManagedLedgerInfo.LedgerInfo ledgerInfo : ledgerInfoSortedMap.values()) {
+            if (!ledgerInfo.hasTimestamp() || ledgerInfo.getTimestamp() == 0L
+                    || !MessageImpl.isEntryExpired(messageTTLInSeconds, ledgerInfo.getTimestamp())) {
+                break;
             }
-            if (info != null && info.getLedgerId() > -1) {
-                Position position = PositionFactory.create(info.getLedgerId(), info.getEntries() - 1);
-                if (managedLedger.getLastConfirmedEntry().compareTo(position) < 0) {
-                    findEntryComplete(managedLedger.getLastConfirmedEntry(), null);
-                } else {
-                    findEntryComplete(position, null);
-                }
+            info = ledgerInfo;
+        }
+        if (info != null && info.getLedgerId() > -1) {
+            Position position = PositionFactory.create(info.getLedgerId(), info.getEntries() - 1);
+            if (managedLedger.getLastConfirmedEntry().compareTo(position) < 0) {
+                findEntryComplete(managedLedger.getLastConfirmedEntry(), null);
+            } else {
+                findEntryComplete(position, null);
             }
         }
     }
@@ -240,11 +238,13 @@ public class PersistentMessageExpiryMonitor implements FindEntryCallback, Messag
                     exception.getMessage());
             if (exception instanceof LedgerNotExistException) {
                 long failedLedgerId = failedReadPosition.get().getLedgerId();
-                ManagedLedgerImpl ledger = ((ManagedLedgerImpl) cursor.getManagedLedger());
+                ManagedLedger ledger = cursor.getManagedLedger();
                 Position lastPositionInLedger = ledger.getOptionalLedgerInfo(failedLedgerId)
                         .map(ledgerInfo -> PositionFactory.create(failedLedgerId, ledgerInfo.getEntries() - 1))
                         .orElseGet(() -> {
-                            Long nextExistingLedger = ledger.getNextValidLedger(failedReadPosition.get().getLedgerId());
+                            Long nextExistingLedger =
+                                    ManagedLedgerUtils.getNextValidLedger(ledger,
+                                            failedReadPosition.get().getLedgerId());
                             if (nextExistingLedger == null) {
                                 log.info("[{}] [{}] Couldn't find next next valid ledger for expiry monitor when find "
                                                 + "entry failed {}", ledger.getName(), ledger.getName(),

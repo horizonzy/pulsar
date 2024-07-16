@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -44,7 +45,6 @@ import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.PositionFactory;
 import org.apache.bookkeeper.mledger.impl.AckSetStateUtil;
-import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.pulsar.broker.service.BrokerServiceException.PersistenceException;
 import org.apache.pulsar.broker.transaction.pendingack.PendingAckReplyCallBack;
@@ -55,6 +55,7 @@ import org.apache.pulsar.broker.transaction.pendingack.proto.PendingAckMetadataE
 import org.apache.pulsar.broker.transaction.pendingack.proto.PendingAckOp;
 import org.apache.pulsar.broker.transaction.util.LogIndexLagBackoff;
 import org.apache.pulsar.client.api.transaction.TxnID;
+import org.apache.pulsar.client.util.ExecutorProvider;
 import org.apache.pulsar.common.allocator.PulsarByteBufAllocator;
 import org.apache.pulsar.common.api.proto.CommandAck.AckType;
 import org.apache.pulsar.common.naming.SystemTopicNames;
@@ -118,6 +119,8 @@ public class MLPendingAckStore implements PendingAckStore {
 
     private TxnLogBufferedWriter<PendingAckMetadataEntry> bufferedWriter;
 
+    private ExecutorService executor;
+
     public MLPendingAckStore(ManagedLedger managedLedger, ManagedCursor cursor,
                              ManagedCursor subManagedCursor, long transactionPendingAckLogIndexMinLag,
                              TxnLogBufferedWriterConfig bufferedWriterConfig,
@@ -131,7 +134,9 @@ public class MLPendingAckStore implements PendingAckStore {
         this.subManagedCursor = subManagedCursor;
         this.logIndexBackoff = new LogIndexLagBackoff(transactionPendingAckLogIndexMinLag, Long.MAX_VALUE, 1);
         this.maxIndexLag = logIndexBackoff.next(0);
-        this.bufferedWriter = new TxnLogBufferedWriter(managedLedger, ((ManagedLedgerImpl) managedLedger).getExecutor(),
+        this.executor = Executors.newSingleThreadExecutor(
+                new ExecutorProvider.ExtendedThreadFactory("pulsar-pending-ack-store"));
+        this.bufferedWriter = new TxnLogBufferedWriter(managedLedger, executor,
                 timer, PendingAckLogSerializer.INSTANCE,
                 bufferedWriterConfig.getBatchedWriteMaxRecords(), bufferedWriterConfig.getBatchedWriteMaxSize(),
                 bufferedWriterConfig.getBatchedWriteMaxDelayInMillis(), bufferedWriterConfig.isBatchEnabled(),
